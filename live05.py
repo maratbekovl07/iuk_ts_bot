@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 openai.api_key = "OPENAI_API_KEY"
 bot = telebot.TeleBot('7759072375:AAFOzaKYQShuSrteyMxmHfQzoT5BX3E956U')  # Укажите ваш токен
 
-ADMIN_CHAT_ID = 650963487  # Замените на ID администратора
+ADMIN_GROUP_ID = -4777086960  # Замените на ID вашей группы
 
 # Хранилище заблокированных пользователей
 banned_users = set()  # Хранилище заблокированных пользователей
@@ -75,7 +75,7 @@ def save_message_to_db(user_id, message_type, content):
 
 @bot.message_handler(commands=['start'])
 def main(message):
-    if message.chat.id == ADMIN_CHAT_ID:
+    if message.chat.id == ADMIN_GROUP_ID:
         admin_menu(message)
         return
 
@@ -103,7 +103,7 @@ def admin_menu(message):
         reply_markup=admin_menu
     )
 
-@bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.id == ADMIN_CHAT_ID)
+@bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.id == ADMIN_GROUP_ID)
 def show_queue(message):
     conn = sqlite3.connect('messages.db')
     c = conn.cursor()
@@ -126,7 +126,7 @@ def show_queue(message):
 
     bot.send_message(message.chat.id, queue_summary)
 
-@bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.id == ADMIN_CHAT_ID)
+@bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.id == ADMIN_GROUP_ID)
 def reply_instruction(message):
     bot.send_message(
         message.chat.id,
@@ -146,7 +146,7 @@ def user_exists(user_id):
 
 @bot.message_handler(commands=['reply'])
 def reply_to_user(message):
-    if message.chat.id != ADMIN_CHAT_ID:
+    if message.chat.id != ADMIN_GROUP_ID:
         bot.send_message(message.chat.id, "Вы не администратор!")
         return
 
@@ -229,7 +229,7 @@ def handle_user_message(message):
     state = get_user_state(user_id)
 
     # Игнорируем сообщения от администратора
-    if user_id == ADMIN_CHAT_ID:
+    if user_id == ADMIN_GROUP_ID:
         return
 
     # Проверка на блокировку пользователя
@@ -241,7 +241,7 @@ def handle_user_message(message):
     if message.text and contains_profanity(message.text):
         bot.send_message(user_id, "🚫 Ваше сообщение содержит недопустимые слова. Вы заблокированы.")
         banned_users.add(user_id)  # Добавляем пользователя в список заблокированных
-        bot.send_message(ADMIN_CHAT_ID, f"⚠️ Пользователь {user_id} был заблокирован за использование ненормативной лексики.")
+        bot.send_message(ADMIN_GROUP_ID, f"⚠️ Пользователь {user_id} был заблокирован за использование ненормативной лексики.")
         return
 
     # Проверяем, выбрал ли пользователь команду
@@ -264,7 +264,7 @@ def handle_message_for_admin(message, user_id):
         photo_id = message.photo[-1].file_id
         save_message_to_db(user_id, 'photo', photo_id)
         bot.send_photo(
-            ADMIN_CHAT_ID,
+            ADMIN_GROUP_ID,
             photo_id,
             caption=f"📸 Фото от пользователя {user_id}:\n\nИмя: {message.from_user.first_name}\n"
                     f"Фамилия: {message.from_user.last_name or 'не указана'}\n"
@@ -274,7 +274,7 @@ def handle_message_for_admin(message, user_id):
     elif message.text:
         save_message_to_db(user_id, 'text', message.text)
         bot.send_message(
-            ADMIN_CHAT_ID,
+            ADMIN_GROUP_ID,
             f"📩 Сообщение от пользователя {user_id}:\n\n"
             f"Имя: {message.from_user.first_name}\n"
             f"Фамилия: {message.from_user.last_name or 'не указана'}\n"
