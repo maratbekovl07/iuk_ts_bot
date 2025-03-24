@@ -18,7 +18,7 @@ user_states = {}
 # Хранилище заблокированных пользователей
 banned_users = set()  # Хранилище заблокированных пользователей
 
-FORBIDDEN_WORDS = [              ]  # Замените на реальные запрещенные слова
+FORBIDDEN_WORDS = []  # Замените на реальные запрещенные слова
 
 def contains_profanity(text):
     """
@@ -28,7 +28,6 @@ def contains_profanity(text):
         if word in text.lower():  # Приводим текст к нижнему регистру для сравнения
             return True
     return False
-
 
 # Возможные состояния
 STATE_DEFAULT = "default"
@@ -40,7 +39,6 @@ def set_user_state(user_id, state):
 
 def get_user_state(user_id):
     return user_states.get(user_id, STATE_DEFAULT)
-
 
 @bot.message_handler(commands=['start'])
 def main(message):
@@ -60,7 +58,6 @@ def main(message):
         reply_markup=main_menu
     )
 
-
 def admin_menu(message):
     # Меню для администратора
     admin_menu = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -72,7 +69,6 @@ def admin_menu(message):
         "Добро пожаловать в админ-панель! 👨‍💻\nВыберите действие:",
         reply_markup=admin_menu
     )
-
 
 @bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.id == ADMIN_CHAT_ID)
 def show_queue(message):
@@ -92,7 +88,6 @@ def show_queue(message):
 
     bot.send_message(message.chat.id, queue_summary)
 
-
 @bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.id == ADMIN_CHAT_ID)
 def reply_instruction(message):
     bot.send_message(
@@ -103,10 +98,8 @@ def reply_instruction(message):
         parse_mode="Markdown"
     )
 
-
 def user_exists(user_id):
-    pass
-
+    return user_id in user_messages
 
 @bot.message_handler(commands=['reply'])
 def reply_to_user(message):
@@ -134,7 +127,6 @@ def reply_to_user(message):
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
-
 @bot.message_handler(func=lambda message: message.text == "📘 AVN")
 def avn_portal(message):
     set_user_state(message.chat.id, STATE_AVN_RESTORE)  # Пример установки состояния
@@ -145,7 +137,6 @@ def avn_portal(message):
         "[AVN Portal](https://avn.pc.edu.kg/lms/login)",
         parse_mode="Markdown"
     )
-
 
 @bot.message_handler(func=lambda message: message.text == "🌐 Сайт колледжа")
 def site(message):
@@ -158,7 +149,6 @@ def site(message):
         parse_mode="Markdown"
     )
 
-
 @bot.message_handler(func=lambda message: message.text == "✉️ Обращение к IT Hab")
 def it_hab_contact(message):
     set_user_state(message.chat.id, STATE_IT_HUB_CONTACT)
@@ -167,7 +157,6 @@ def it_hab_contact(message):
         "✉️ Напишите ваше сообщение для IT Hab. Мы постараемся ответить вам как можно быстрее.\n\n"
         "Просто отправьте текст или прикрепите фото прямо в этот чат."
     )
-
 
 @bot.message_handler(func=lambda message: message.text == "🔒 Восстановление AVN")
 def restore_avn(message):
@@ -188,7 +177,6 @@ def restore_avn(message):
         message.chat.id,
         "После того как заполните рапорт, прикрепите фото рапорта и отправьте свои данные через этот чат."
     )
-
 
 @bot.message_handler(content_types=['photo', 'text'])
 def handle_user_message(message):
@@ -222,7 +210,6 @@ def handle_user_message(message):
         handle_message_for_admin(message, user_id)
     else:
         bot.send_message(user_id, "⚠️ Выберите команду из меню, чтобы продолжить.")
-
 
 def handle_message_for_admin(message, user_id):
     """
