@@ -2,8 +2,6 @@ import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 import openai
 import sqlite3
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 openai.api_key = "OPENAI_API_KEY"
 bot = telebot.TeleBot('7759072375:AAFOzaKYQShuSrteyMxmHfQzoT5BX3E956U')  # Укажите ваш токен
@@ -199,16 +197,16 @@ def site(message):
         parse_mode="Markdown"
     )
 
-@bot.message_handler(func=lambda message: message.text == "✉️ Обращение к IT Hab")
-def it_hab_contact(message):
+@bot.message_handler(func=lambda message: message.text == "✉️ Обращение к IT Hub")
+def it_hub_contact(message):
     set_user_state(message.chat.id, STATE_IT_HUB_CONTACT)
     bot.send_message(
         message.chat.id,
-        "✉️ Напишите ваше сообщение для IT Hab. Мы постараемся ответить вам как можно быстрее.\n\n"
+        "✉️ Напишите ваше сообщение для IT Hub. Мы постараемся ответить вам как можно быстрее.\n\n"
         "Просто отправьте текст или прикрепите фото прямо в этот чат."
     )
 
-@bot.message_handler(func=lambda message: message.text == "🔒 Восстановление AVN")
+@bot.message_handler(func=lambda message: message.text == "🔒 Восстановление доступа AVN")
 def restore_avn(message):
     set_user_state(message.chat.id, STATE_AVN_RESTORE)
     bot.send_message(
