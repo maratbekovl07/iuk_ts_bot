@@ -1,6 +1,7 @@
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 import openai
+import sqlite3
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -8,12 +9,6 @@ openai.api_key = "OPENAI_API_KEY"
 bot = telebot.TeleBot('7759072375:AAFOzaKYQShuSrteyMxmHfQzoT5BX3E956U')  # Укажите ваш токен
 
 ADMIN_CHAT_ID = 650963487  # Замените на ID администратора
-
-# Хранилище сообщений от пользователей
-user_messages = {}
-
-# Хранилище состояний пользователей
-user_states = {}
 
 # Хранилище заблокированных пользователей
 banned_users = set()  # Хранилище заблокированных пользователей
@@ -34,11 +29,49 @@ STATE_DEFAULT = "default"
 STATE_IT_HUB_CONTACT = "it_hub_contact"
 STATE_AVN_RESTORE = "avn_restore"
 
+# Инициализация базы данных
+def init_db():
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            message_type TEXT,
+            content TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
 def set_user_state(user_id, state):
-    user_states[user_id] = state
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS user_states (
+            user_id INTEGER PRIMARY KEY,
+            state TEXT
+        )
+    ''')
+    c.execute('INSERT OR REPLACE INTO user_states (user_id, state) VALUES (?, ?)', (user_id, state))
+    conn.commit()
+    conn.close()
 
 def get_user_state(user_id):
-    return user_states.get(user_id, STATE_DEFAULT)
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('SELECT state FROM user_states WHERE user_id = ?', (user_id,))
+    state = c.fetchone()
+    conn.close()
+    return state[0] if state else STATE_DEFAULT
+
+def save_message_to_db(user_id, message_type, content):
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('INSERT INTO messages (user_id, message_type, content) VALUES (?, ?, ?)', (user_id, message_type, content))
+    conn.commit()
+    conn.close()
 
 @bot.message_handler(commands=['start'])
 def main(message):
@@ -72,18 +105,23 @@ def admin_menu(message):
 
 @bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.id == ADMIN_CHAT_ID)
 def show_queue(message):
-    if not user_messages:
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('SELECT user_id, message_type, content FROM messages')
+    rows = c.fetchall()
+    conn.close()
+
+    if not rows:
         bot.send_message(message.chat.id, "📭 Очередь пуста. Сообщений от пользователей нет.")
         return
 
     queue_summary = "📋 Очередь сообщений:\n\n"
-    for user_id, messages in user_messages.items():
+    for user_id, message_type, content in rows:
         queue_summary += f"👤 Пользователь {user_id}:\n"
-        for idx, msg in enumerate(messages, 1):
-            if msg['type'] == 'text':
-                queue_summary += f"  {idx}. ✉️ Текст: {msg['content'][:50]}...\n"
-            elif msg['type'] == 'photo':
-                queue_summary += f"  {idx}. 📸 Фото (ID: {msg['content']})\n"
+        if message_type == 'text':
+            queue_summary += f"  ✉️ Текст: {content[:50]}...\n"
+        elif message_type == 'photo':
+            queue_summary += f"  📸 Фото (ID: {content})\n"
         queue_summary += "\n"
 
     bot.send_message(message.chat.id, queue_summary)
@@ -99,7 +137,12 @@ def reply_instruction(message):
     )
 
 def user_exists(user_id):
-    return user_id in user_messages
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('SELECT 1 FROM messages WHERE user_id = ?', (user_id,))
+    exists = c.fetchone() is not None
+    conn.close()
+    return exists
 
 @bot.message_handler(commands=['reply'])
 def reply_to_user(message):
@@ -108,7 +151,6 @@ def reply_to_user(message):
         return
 
     try:
-        # Формат команды: /reply <user_id> <ответ>
         parts = message.text.split(' ', 2)
         if len(parts) < 3:
             bot.send_message(message.chat.id, "⚠️ Используйте формат команды: `/reply <user_id> <ответ>`", parse_mode="Markdown")
@@ -117,11 +159,14 @@ def reply_to_user(message):
         user_id = int(parts[1])
         reply_text = parts[2]
 
-        # Проверка, существует ли пользователь в базе сообщений
         if user_exists(user_id):
             bot.send_message(user_id, f"📩 Ответ от администратора:\n\n{reply_text}")
             bot.send_message(message.chat.id, f"✅ Ответ пользователю {user_id} отправлен.")
-            del user_messages[user_id]  # Удаляем из очереди после ответа
+            conn = sqlite3.connect('messages.db')
+            c = conn.cursor()
+            c.execute('DELETE FROM messages WHERE user_id = ?', (user_id,))
+            conn.commit()
+            conn.close()
         else:
             bot.send_message(message.chat.id, f"⚠️ Пользователь с ID {user_id} не найден в базе.")
     except Exception as e:
@@ -217,6 +262,7 @@ def handle_message_for_admin(message, user_id):
     """
     if message.photo:
         photo_id = message.photo[-1].file_id
+        save_message_to_db(user_id, 'photo', photo_id)
         bot.send_photo(
             ADMIN_CHAT_ID,
             photo_id,
@@ -226,6 +272,7 @@ def handle_message_for_admin(message, user_id):
         )
         bot.send_message(user_id, "Ваше фото было отправлено администратору. Ожидайте ответа.")
     elif message.text:
+        save_message_to_db(user_id, 'text', message.text)
         bot.send_message(
             ADMIN_CHAT_ID,
             f"📩 Сообщение от пользователя {user_id}:\n\n"
@@ -238,4 +285,6 @@ def handle_message_for_admin(message, user_id):
     # Возврат в состояние по умолчанию
     set_user_state(user_id, STATE_DEFAULT)
 
-bot.infinity_polling()
+if __name__ == "__main__":
+    init_db()
+    bot.infinity_polling()
