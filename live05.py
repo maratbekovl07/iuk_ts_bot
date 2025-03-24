@@ -228,13 +228,35 @@ def handle_user_message(message):
     user_id = message.chat.id
     state = get_user_state(user_id)
 
-    # Игнорируем сообщения от группы
-    if message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID:
-        return
-
     # Проверка на блокировку пользователя
     if user_id in banned_users:
         bot.send_message(user_id, "🚫 Вы были заблокированы за нарушение правил.")
+        return
+
+    if message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID:
+        # Обработка сообщений от группы как от администраторов
+        if message.photo:
+            photo_id = message.photo[-1].file_id
+            save_message_to_db(user_id, 'photo', photo_id)
+            bot.send_photo(
+                ADMIN_GROUP_ID,
+                photo_id,
+                caption=f"📸 Фото от пользователя {user_id}:\n\nИмя: {message.from_user.first_name}\n"
+                        f"Фамилия: {message.from_user.last_name or 'не указана'}\n"
+                        f"Имя пользователя: @{message.from_user.username or 'не указано'}"
+            )
+            bot.send_message(user_id, "Ваше фото было отправлено администратору. Ожидайте ответа.")
+        elif message.text:
+            save_message_to_db(user_id, 'text', message.text)
+            bot.send_message(
+                ADMIN_GROUP_ID,
+                f"📩 Сообщение от пользователя {user_id}:\n\n"
+                f"Имя: {message.from_user.first_name}\n"
+                f"Фамилия: {message.from_user.last_name or 'не указана'}\n"
+                f"Имя пользователя: @{message.from_user.username or 'не указано'}\n\n"
+                f"Сообщение: {message.text}"
+            )
+            bot.send_message(user_id, "Ваше сообщение отправлено администратору. Ожидайте ответа.")
         return
 
     # Проверяем текстовые сообщения на наличие запрещенных слов
