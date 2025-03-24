@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 openai.api_key = "OPENAI_API_KEY"
 bot = telebot.TeleBot('7759072375:AAFOzaKYQShuSrteyMxmHfQzoT5BX3E956U')  # Укажите ваш токен
 
-ADMIN_GROUP_ID = -4777086960  # Замените на ID вашей группы
+ADMIN_GROUP_ID = -1002607571711  # Замените на ID вашей группы
 
 # Хранилище заблокированных пользователей
 banned_users = set()  # Хранилище заблокированных пользователей
