@@ -75,7 +75,7 @@ def save_message_to_db(user_id, message_type, content):
 
 @bot.message_handler(commands=['start'])
 def main(message):
-    if message.chat.type == 'group' and message.chat.id == ADMIN_GROUP_ID:
+    if message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID:
         admin_menu(message)
         return
 
@@ -103,7 +103,7 @@ def admin_menu(message):
         reply_markup=admin_menu
     )
 
-@bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.type == 'group' and message.chat.id == ADMIN_GROUP_ID)
+@bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID)
 def show_queue(message):
     conn = sqlite3.connect('messages.db')
     c = conn.cursor()
@@ -126,7 +126,7 @@ def show_queue(message):
 
     bot.send_message(message.chat.id, queue_summary)
 
-@bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.type == 'group' and message.chat.id == ADMIN_GROUP_ID)
+@bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID)
 def reply_instruction(message):
     bot.send_message(
         message.chat.id,
@@ -146,7 +146,7 @@ def user_exists(user_id):
 
 @bot.message_handler(commands=['reply'])
 def reply_to_user(message):
-    if message.chat.type != 'group' or message.chat.id != ADMIN_GROUP_ID:
+    if message.chat.type not in ['group', 'supergroup'] or message.chat.id != ADMIN_GROUP_ID:
         bot.send_message(message.chat.id, "Вы не администратор!")
         return
 
@@ -229,7 +229,7 @@ def handle_user_message(message):
     state = get_user_state(user_id)
 
     # Игнорируем сообщения от группы
-    if message.chat.type == 'group' and message.chat.id == ADMIN_GROUP_ID:
+    if message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID:
         return
 
     # Проверка на блокировку пользователя
