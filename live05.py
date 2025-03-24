@@ -1,5 +1,5 @@
 import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 import openai
 import sqlite3
 from telegram import Update
@@ -8,7 +8,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 openai.api_key = "OPENAI_API_KEY"
 bot = telebot.TeleBot('7759072375:AAFOzaKYQShuSrteyMxmHfQzoT5BX3E956U')  # Укажите ваш токен
 
-ADMIN_CHAT_ID = 650963487  # Замените на ID администратора
+ADMIN_GROUP_ID = -4777086960  # Замените на ID вашей группы
 
 # Хранилище заблокированных пользователей
 banned_users = set()  # Хранилище заблокированных пользователей
@@ -75,7 +75,7 @@ def save_message_to_db(user_id, message_type, content):
 
 @bot.message_handler(commands=['start'])
 def main(message):
-    if message.chat.id == ADMIN_CHAT_ID:
+    if message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID:
         admin_menu(message)
         return
 
@@ -91,6 +91,10 @@ def main(message):
         reply_markup=main_menu
     )
 
+@bot.message_handler(commands=['admin'], func=lambda message: message.chat.id == ADMIN_GROUP_ID)
+def admin_panel(message):
+    admin_menu(message)
+
 def admin_menu(message):
     # Меню для администратора
     admin_menu = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -103,7 +107,7 @@ def admin_menu(message):
         reply_markup=admin_menu
     )
 
-@bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.id == ADMIN_CHAT_ID)
+@bot.message_handler(func=lambda message: message.text == "📋 Очередь сообщений" and message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID)
 def show_queue(message):
     conn = sqlite3.connect('messages.db')
     c = conn.cursor()
@@ -126,7 +130,7 @@ def show_queue(message):
 
     bot.send_message(message.chat.id, queue_summary)
 
-@bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.id == ADMIN_CHAT_ID)
+@bot.message_handler(func=lambda message: message.text == "✉️ Ответить пользователю" and message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID)
 def reply_instruction(message):
     bot.send_message(
         message.chat.id,
@@ -146,7 +150,7 @@ def user_exists(user_id):
 
 @bot.message_handler(commands=['reply'])
 def reply_to_user(message):
-    if message.chat.id != ADMIN_CHAT_ID:
+    if message.chat.type not in ['group', 'supergroup'] or message.chat.id != ADMIN_GROUP_ID:
         bot.send_message(message.chat.id, "Вы не администратор!")
         return
 
@@ -167,6 +171,7 @@ def reply_to_user(message):
             c.execute('DELETE FROM messages WHERE user_id = ?', (user_id,))
             conn.commit()
             conn.close()
+            bot.send_message(ADMIN_GROUP_ID, f"✅ Администратор @{message.from_user.username} ответил пользователю {user_id}.")
         else:
             bot.send_message(message.chat.id, f"⚠️ Пользователь с ID {user_id} не найден в базе.")
     except Exception as e:
@@ -228,20 +233,21 @@ def handle_user_message(message):
     user_id = message.chat.id
     state = get_user_state(user_id)
 
-    # Игнорируем сообщения от администратора
-    if user_id == ADMIN_CHAT_ID:
-        return
-
     # Проверка на блокировку пользователя
     if user_id in banned_users:
         bot.send_message(user_id, "🚫 Вы были заблокированы за нарушение правил.")
+        return
+
+    if message.chat.type in ['group', 'supergroup'] and message.chat.id == ADMIN_GROUP_ID:
+        # Обработка сообщений от группы как от администраторов
+        handle_message_for_admin(message, user_id)
         return
 
     # Проверяем текстовые сообщения на наличие запрещенных слов
     if message.text and contains_profanity(message.text):
         bot.send_message(user_id, "🚫 Ваше сообщение содержит недопустимые слова. Вы заблокированы.")
         banned_users.add(user_id)  # Добавляем пользователя в список заблокированных
-        bot.send_message(ADMIN_CHAT_ID, f"⚠️ Пользователь {user_id} был заблокирован за использование ненормативной лексики.")
+        bot.send_message(ADMIN_GROUP_ID, f"⚠️ Пользователь {user_id} был заблокирован за использование ненормативной лексики.")
         return
 
     # Проверяем, выбрал ли пользователь команду
@@ -260,30 +266,50 @@ def handle_message_for_admin(message, user_id):
     """
     Функция для обработки сообщений и отправки их администратору.
     """
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Ответить", callback_data=f"reply_{user_id}"))
+
     if message.photo:
         photo_id = message.photo[-1].file_id
         save_message_to_db(user_id, 'photo', photo_id)
         bot.send_photo(
-            ADMIN_CHAT_ID,
+            ADMIN_GROUP_ID,
             photo_id,
             caption=f"📸 Фото от пользователя {user_id}:\n\nИмя: {message.from_user.first_name}\n"
                     f"Фамилия: {message.from_user.last_name or 'не указана'}\n"
-                    f"Имя пользователя: @{message.from_user.username or 'не указано'}"
+                    f"Имя пользователя: @{message.from_user.username or 'не указано'}",
+            reply_markup=markup
         )
         bot.send_message(user_id, "Ваше фото было отправлено администратору. Ожидайте ответа.")
     elif message.text:
         save_message_to_db(user_id, 'text', message.text)
         bot.send_message(
-            ADMIN_CHAT_ID,
+            ADMIN_GROUP_ID,
             f"📩 Сообщение от пользователя {user_id}:\n\n"
             f"Имя: {message.from_user.first_name}\n"
             f"Фамилия: {message.from_user.last_name or 'не указана'}\n"
             f"Имя пользователя: @{message.from_user.username or 'не указано'}\n\n"
-            f"Сообщение: {message.text}"
+            f"Сообщение: {message.text}",
+            reply_markup=markup
         )
         bot.send_message(user_id, "Ваше сообщение отправлено администратору. Ожидайте ответа.")
-    # Возврат в состояние по умолчанию
-    set_user_state(user_id, STATE_DEFAULT)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("reply_"))
+def reply_callback(call):
+    user_id = call.data.split("_")[1]
+    msg = bot.send_message(call.message.chat.id, f"Введите ответ для пользователя {user_id}:")
+    bot.register_next_step_handler(msg, send_reply, user_id)
+
+def send_reply(message, user_id):
+    bot.send_message(user_id, f"📩 Ответ от администратора:\n{message.text}")
+    bot.send_message(message.chat.id, "✅ Ответ отправлен.")
+    bot.send_message(ADMIN_GROUP_ID, f"✅ Администратор @{message.from_user.username} ответил пользователю {user_id}.")
+    
+    conn = sqlite3.connect('messages.db')
+    c = conn.cursor()
+    c.execute('DELETE FROM messages WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
 
 if __name__ == "__main__":
     init_db()
