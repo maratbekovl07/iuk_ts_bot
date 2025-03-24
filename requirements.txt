@@ -1,3 +1,4 @@
 pyTelegramBotAPI
 openai
 python-telegram-bot
+Sqlite3
